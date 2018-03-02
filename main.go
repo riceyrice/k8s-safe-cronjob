@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"errors"
 	"os/exec"
-	"strings"
 
 	"github.com/getsentry/raven-go"
 )
@@ -12,18 +12,20 @@ import (
 func main() {
 	dsn := flag.String("dsn", "", "Sentry dsn to report errors")
 	flag.Parse()
-	command := strings.Join(flag.Args(), " ")
+	command := flag.Arg(0)
+	args := flag.Args()[1:]
 	if *dsn != "" {
 		fmt.Println("Using sentry dsn", *dsn)
 		raven.SetDSN(*dsn)
 	}
 	if command != "" {
-		cmd := exec.Command(command)
+		cmd := exec.Command(command, args...)
 		output, err := cmd.CombinedOutput()
-		fmt.Println(string(output))
+		fmt.Printf("%s", string(output))
 		if err != nil {
 			if *dsn != "" {
-				raven.CaptureErrorAndWait(err, nil)
+				wrapper := errors.New(fmt.Sprintf("Command exited with non-zero status: %s, reported: %s, output: %s", command, err.Error(), output))
+				raven.CaptureErrorAndWait(wrapper, nil)
 			} else {
 				fmt.Println(err.Error())
 			}
